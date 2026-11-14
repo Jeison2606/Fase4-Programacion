@@ -6,7 +6,7 @@ from datetime import datetime
 # ==========================================
 class SistemaLogs:
     @staticmethod
-    def registro_log(mensaje, tipo="INFO"):
+    def registrar_log(mensaje, tipo="INFO"):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] [{tipo}] {mensaje}\n"
         try:
@@ -24,6 +24,9 @@ class ErrorDatoInvalido(Exception):
 class ErrorReservaNoPermitida(Exception):
     pass
 
+class ErrorClienteDuplicado(ErrorDatoInvalido):
+    pass
+
 # ==========================================
 # CLASE ABSTRACTA GENERAL Y CLASE CLIENTE
 # ==========================================
@@ -33,11 +36,31 @@ class EntidadSistema(ABC):
         pass
 
 class Cliente(EntidadSistema):
+
+    cedulas_registradas = set()
     def __init__(self, cedula, nombre, telefono, correo):
-        self.cedula = self._validar_cedula(cedula)
-        self.nombre = self._validar_nombre(nombre)
-        self.telefono = self._validar_telefono(telefono)
-        self.correo = self._validar_correo(correo)
+
+        cedula_validada = self._validar_cedula(cedula)
+
+        if cedula_validada in Cliente.cedulas_registradas:
+            SistemaLogs.registrar_log(
+                f"Intento de registrar cédula duplicada: {cedula_validada}",
+                "ERROR"
+            )
+            raise ErrorClienteDuplicado(
+                "Ya existe un cliente registrado con esta cedula."
+            )
+
+        nombre_validado = self._validar_nombre(nombre)
+        telefono_validado = self._validar_telefono(telefono)
+        correo_validado = self._validar_correo(correo)
+
+        self.cedula = cedula_validada
+        self.nombre = nombre_validado
+        self.telefono = telefono_validado
+        self.correo = correo_validado
+
+        Cliente.cedulas_registradas.add(cedula_validada)
 
     def _validar_cedula(self, cedula):
         if not cedula or not str(cedula).isdigit() or len(str(cedula)) < 6:
@@ -179,7 +202,7 @@ class Reserva:
         finally:
             print("[INFO] Operación de confirmación finalizada (Bloque Finally ejecutado).\n")
 
-  def cancelar_reserva(self):
+    def cancelar_reserva(self):
         if self.estado=="Cancelada":  
             raise ErrorReservaNoPermitida("La reserva ya se encuentra cancelada previamente.")
         self.estado = "Cancelada"
@@ -265,3 +288,16 @@ if __name__ == "__main__":
         )
     except ErrorDatoInvalido as e:
         print(f"[ERROR CONTROLADO] {e}")
+
+    # --- PRUEBA DE CEDULAS DUPLICADAS ---
+print("\n--- PRUEBA DE CEDULAS DUPLICADAS ---")
+
+try:
+    Cliente(
+        "12345678",
+        "Cliente Duplicado",
+        "3000000000",
+        "duplicado@mail.com"
+    )
+except ErrorClienteDuplicado as e:
+    print(f"[ERROR CONTROLADO] {e}")
